@@ -1,0 +1,23 @@
+# .NET build output
+**/bin/
+**/obj/
+TestResults/
+
+# IDE files
+.vs/
+*.user
+*.suo
+
+# Local .NET SDK and package caches
+.dotnet/
+.nuget/
+.temp/
+
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db

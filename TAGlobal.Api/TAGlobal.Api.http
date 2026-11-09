@@ -1,0 +1,38 @@
+﻿@TAGlobal.Api_HostAddress = http://localhost:5277
+
+GET {{TAGlobal.Api_HostAddress}}/swagger/v1/swagger.json
+Accept: application/json
+
+###
+GET {{TAGlobal.Api_HostAddress}}/api/health
+Accept: application/json
+
+###
+GET {{TAGlobal.Api_HostAddress}}/api/categories
+Accept: application/json
+
+###
+GET {{TAGlobal.Api_HostAddress}}/api/products?page=1&pageSize=20
+Accept: application/json
+
+###
+POST {{TAGlobal.Api_HostAddress}}/api/categories
+Content-Type: application/json
+
+{
+  "name": "Hijab & Kerudung",
+  "description": "Produk hijab dan kerudung"
+}
+
+###
+POST {{TAGlobal.Api_HostAddress}}/api/products
+Content-Type: application/json
+
+{
+  "name": "Pashmina Voal Premium",
+  "description": "Finishing lembut, pilihan warna beragam",
+  "price": 4.60,
+  "currency": "USD",
+  "stock": 2400,
+  "categoryId": 3
+}
