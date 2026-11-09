@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +9,7 @@ namespace TAGlobal.Api.Controllers;
 [ApiController,Route("api")]
 public sealed class MarketplaceController(AppDbContext db):ControllerBase
 {
- private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);private int UserId=>int.TryParse(User.FindFirst("sub")?.Value,out var id)?id:0;private bool IsAdmin=>User.IsInRole("admin");private int? SellerId=>int.TryParse(User.FindFirst("sellerId")?.Value,out var id)?id:null;
+ private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);private int UserId=>int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value??User.FindFirst("sub")?.Value??User.FindFirst("id")?.Value,out var id)?id:0;private bool IsAdmin=>User.IsInRole("admin")||User.HasClaim(System.Security.Claims.ClaimTypes.Role,"admin")||User.HasClaim("role","admin");private int? SellerId=>int.TryParse(User.FindFirst("sellerId")?.Value,out var id)?id:null;
  [AllowAnonymous,HttpGet("products")]
  public async Task<IActionResult> Products([FromQuery]string? search,[FromQuery]string? category,[FromQuery]int? sellerId,[FromQuery]string? status,[FromQuery]decimal? minPrice,[FromQuery]decimal? maxPrice,[FromQuery]int page=1,[FromQuery]int pageSize=100,CancellationToken ct=default){var q=db.Products.AsNoTracking().Include(p=>p.Category).AsQueryable();if(!User.Identity!.IsAuthenticated)q=q.Where(p=>p.Status=="active");if(SellerId is int own&&!IsAdmin)q=q.Where(p=>p.SellerId==own);if(!string.IsNullOrWhiteSpace(status)&&(IsAdmin||SellerId.HasValue))q=q.Where(p=>p.Status==status);if(!string.IsNullOrWhiteSpace(search))q=q.Where(p=>EF.Functions.ILike(p.Name,$"%{search.Trim()}%")||EF.Functions.ILike(p.Sub,$"%{search.Trim()}%"));if(!string.IsNullOrWhiteSpace(category))q=q.Where(p=>p.Category!.Name==category);if(sellerId.HasValue)q=q.Where(p=>p.SellerId==sellerId);if(minPrice.HasValue)q=q.Where(p=>p.Price>=minPrice);if(maxPrice.HasValue)q=q.Where(p=>p.Price<=maxPrice);return Ok((await q.OrderByDescending(p=>p.CreatedAtUtc).Skip((Math.Max(1,page)-1)*Math.Clamp(pageSize,1,200)).Take(Math.Clamp(pageSize,1,200)).ToListAsync(ct)).Select(ProductResponse));}
  [AllowAnonymous,HttpGet("products/{id:int}")]

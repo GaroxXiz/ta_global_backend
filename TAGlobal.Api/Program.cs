@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
 using TAGlobal.Api.Data;
@@ -6,6 +6,25 @@ using TAGlobal.Api.Models;
 using TAGlobal.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+if (args.Length == 1 && args[0] == "provision-buyer")
+{
+    var name = Environment.GetEnvironmentVariable("TAGLOBAL_BUYER_NAME");
+    var username = Environment.GetEnvironmentVariable("TAGLOBAL_BUYER_USERNAME");
+    var email = Environment.GetEnvironmentVariable("TAGLOBAL_BUYER_EMAIL");
+    var password = Environment.GetEnvironmentVariable("TAGLOBAL_BUYER_PASSWORD");
+    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(username) ||
+        string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        throw new InvalidOperationException("Buyer name, username, email, and password are required.");
+
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+        .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"), o => o.CommandTimeout(5))
+        .Options;
+    await using var db = new AppDbContext(options);
+    await db.Database.MigrateAsync();
+    await TAGlobal.Api.Security.BuyerProvisioner.CreateAsync(db, name, username, email, password);
+    Console.WriteLine($"Created buyer account for {email}.");
+    return;
+}
 if (args.Length == 1 && args[0] == "provision-admin")
 {
     var username = Environment.GetEnvironmentVariable("TAGLOBAL_ADMIN_USERNAME") ?? "superadmin_taglobal";
@@ -44,12 +63,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 {
     var secret = builder.Configuration["Jwt:Secret"];
     if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32) throw new InvalidOperationException("Configure Jwt__Secret in .env (minimum 32 bytes).");
+    o.MapInboundClaims = false;
     o.TokenValidationParameters = new() { ValidateIssuer = true, ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "TAGlobal.Api", ValidateAudience = true, ValidAudience = builder.Configuration["Jwt:Audience"] ?? "TAGlobal.Frontend", ValidateLifetime = true, ValidateIssuerSigningKey = true, IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)), NameClaimType = System.Security.Claims.ClaimTypes.Name, RoleClaimType = System.Security.Claims.ClaimTypes.Role };
 });
 builder.Services.AddAuthorization();
 builder.Services.AddCors(o => o.AddPolicy("Frontend", p => p.WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"]).AllowAnyHeader().AllowAnyMethod()));
 var app = builder.Build();
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "TAGlobal API v1")); }
+if (app.Environment.IsDevelopment()) app.MapGet("/", () => Results.Redirect("/swagger"));
 if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
 {
     await using var scope = app.Services.CreateAsyncScope();
