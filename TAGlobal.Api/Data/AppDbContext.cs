@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using TAGlobal.Api.Models;
 
 namespace TAGlobal.Api.Data;
@@ -14,6 +14,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<MarketplaceSetting> Settings => Set<MarketplaceSetting>();
     public DbSet<ChatThread> Threads => Set<ChatThread>();
     public DbSet<ChatMessage> Messages => Set<ChatMessage>();
+    public DbSet<ProductReview> ProductReviews => Set<ProductReview>();
+    public DbSet<DropoffManifest> DropoffManifests => Set<DropoffManifest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -97,9 +99,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasMany(thread => thread.Messages).WithOne(message => message.Thread)
                 .HasForeignKey(message => message.ThreadId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<ProductReview>(entity =>
+        {
+            entity.HasKey(review => review.Id);
+            entity.Property(review => review.BuyerName).HasMaxLength(200).IsRequired();
+            entity.Property(review => review.BuyerCountry).HasMaxLength(100);
+            entity.Property(review => review.Text).HasMaxLength(2000);
+            entity.Property(review => review.Variant).HasMaxLength(200);
+            entity.HasOne(review => review.Product).WithMany().HasForeignKey(review => review.ProductId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DropoffManifest>(entity =>
+        {
+            entity.HasKey(manifest => manifest.Id);
+            entity.Property(manifest => manifest.ManifestCode).HasMaxLength(50).IsRequired();
+            entity.HasIndex(manifest => manifest.ManifestCode).IsUnique();
+            entity.Property(manifest => manifest.OrderIdsJson).HasColumnType("jsonb");
+            entity.Property(manifest => manifest.TotalWeight).HasPrecision(10, 2);
+        });
     }
 }
-
-
-
-

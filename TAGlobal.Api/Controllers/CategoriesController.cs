@@ -1,19 +1,31 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using TAGlobal.Api.Application.UseCases;
 using TAGlobal.Api.Contracts;
-using TAGlobal.Api.Data;
-using TAGlobal.Api.Models;
+
 namespace TAGlobal.Api.Controllers;
-[ApiController,Route("api/categories")]
-public sealed class CategoriesController(AppDbContext db):ControllerBase
+
+[ApiController, Route("api/categories")]
+public sealed class CategoriesController(ICategoryUseCases useCases) : ControllerBase
 {
- [AllowAnonymous,HttpGet]
- public async Task<IActionResult> Get(CancellationToken ct)=>Ok(await db.Categories.AsNoTracking().OrderBy(x=>x.Id).Select(x=>new{id=x.Id,name=x.Name,description=x.Description}).ToListAsync(ct));
- [AllowAnonymous,HttpGet("{id:int}")]
- public async Task<IActionResult> GetById(int id,CancellationToken ct){var c=await db.Categories.FindAsync([id],ct);return c is null?NotFound():Ok(new{id=c.Id,name=c.Name,description=c.Description});}
- [Authorize(Roles="admin"),HttpPost]
- public async Task<IActionResult> Create(CreateCategoryRequest r,CancellationToken ct){var c=new Category{Name=r.Name.Trim(),Description=r.Description};db.Categories.Add(c);await db.SaveChangesAsync(ct);return CreatedAtAction(nameof(GetById),new{id=c.Id},new{id=c.Id,name=c.Name,description=c.Description});}
- [Authorize(Roles="admin"),HttpDelete("{id:int}")]
- public async Task<IActionResult> Delete(int id,CancellationToken ct){var c=await db.Categories.FindAsync([id],ct);if(c is null)return NotFound();db.Categories.Remove(c);await db.SaveChangesAsync(ct);return NoContent();}
+    [AllowAnonymous, HttpGet]
+    public async Task<ActionResult<IReadOnlyList<CategoryResponse>>> Get(CancellationToken ct) => Ok(await useCases.ListAsync(ct));
+
+    [AllowAnonymous, HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id, CancellationToken ct)
+    {
+        var category = await useCases.GetAsync(id, ct);
+        return category is null ? NotFound() : Ok(category);
+    }
+
+    [Authorize(Roles = "admin"), HttpPost]
+    public async Task<IActionResult> Create(CreateCategoryRequest request, CancellationToken ct)
+    {
+        var category = await useCases.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetById), new { id = category.Id }, category);
+    }
+
+    [Authorize(Roles = "admin"), HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct) =>
+        await useCases.DeleteAsync(id, ct) ? NoContent() : NotFound();
 }

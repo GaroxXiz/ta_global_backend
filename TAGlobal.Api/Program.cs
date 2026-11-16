@@ -4,6 +4,9 @@ using System.Text;
 using TAGlobal.Api.Data;
 using TAGlobal.Api.Models;
 using TAGlobal.Api.Security;
+using TAGlobal.Api.Application.Abstractions;
+using TAGlobal.Api.Application.UseCases;
+using TAGlobal.Api.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 if (args.Length == 1 && args[0] == "provision-buyer")
@@ -21,7 +24,7 @@ if (args.Length == 1 && args[0] == "provision-buyer")
         .Options;
     await using var db = new AppDbContext(options);
     await db.Database.MigrateAsync();
-    await TAGlobal.Api.Security.BuyerProvisioner.CreateAsync(db, name, username, email, password);
+    await TAGlobal.Api.Security.BuyerProvisioner.CreateAsync(new EfUserRepository(db), name, username, email, password);
     Console.WriteLine($"Created buyer account for {email}.");
     return;
 }
@@ -34,7 +37,7 @@ if (args.Length == 1 && args[0] == "provision-admin")
     var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"), o => o.CommandTimeout(5)).Options;
     await using var db = new AppDbContext(options);
     await db.Database.MigrateAsync();
-    await AdminProvisioner.EnsureSuperadminAsync(db, username, email, password);
+    await AdminProvisioner.EnsureSuperadminAsync(new EfUserRepository(db), username, email, password);
     Console.WriteLine($"Provisioned {username} ({email}); password stored as BCrypt hash.");
     return;
 }
@@ -58,7 +61,22 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o => o.SwaggerDoc("v1", new() { Title = "TAGlobal API", Version = "v1" }));
 builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ICategoryRepository, EfCategoryRepository>();
+builder.Services.AddScoped<IProductRepository, EfProductRepository>();
+builder.Services.AddScoped<IHealthRepository, EfHealthRepository>();
+builder.Services.AddScoped<IUserRepository, EfUserRepository>();
+builder.Services.AddScoped<ISellerRepository, EfSellerRepository>();
+builder.Services.AddScoped<IAdminOperationsRepository, EfAdminOperationsRepository>();
+builder.Services.AddScoped<IOrderRepository, EfOrderRepository>();
+builder.Services.AddScoped<ICategoryUseCases, CategoryUseCases>();
+builder.Services.AddScoped<IProductUseCases, ProductUseCases>();
+builder.Services.AddScoped<IHealthUseCases, HealthUseCases>();
+builder.Services.AddScoped<IAuthUseCases, AuthUseCases>();
+builder.Services.AddScoped<ISellerUseCases, SellerUseCases>();
+builder.Services.AddScoped<IAdminOperationsUseCases, AdminOperationsUseCases>();
+builder.Services.AddScoped<IOrderUseCases, OrderUseCases>();
+builder.Services.AddScoped<IAccountUseCases, AccountUseCases>();
+builder.Services.AddScoped<IChatUseCases, ChatUseCases>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
 {
     var secret = builder.Configuration["Jwt:Secret"];
@@ -75,12 +93,14 @@ if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Dat
 {
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await DevelopmentSeed.ApplyAsync(db);
+    await db.Database.MigrateAsync();
+    await DevelopmentSeed.ApplyAsync(new EfDevelopmentSeedRepository(db));
     var adminPassword = builder.Configuration["Seed:SuperadminPassword"];
     if (!string.IsNullOrWhiteSpace(adminPassword) && adminPassword.Length >= 12)
-        await AdminProvisioner.EnsureSuperadminAsync(db, "superadmin_taglobal", "superadmin@taglobal.com", adminPassword);
+        await AdminProvisioner.EnsureSuperadminAsync(new EfUserRepository(db), "superadmin_taglobal", "superadmin@taglobal.com", adminPassword);
 }
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
